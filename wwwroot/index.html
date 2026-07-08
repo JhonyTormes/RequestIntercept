@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RequestIntercept</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="logo">RequestIntercept</div>
+        <div class="header-controls">
+            <span class="status-badge" id="statusBadge">Ativo</span>
+            <span class="count-badge" id="countBadge">0</span>
+            <button id="btnPause" class="btn btn-warning">Pausar</button>
+            <button id="btnClear" class="btn btn-danger">Limpar</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="table-container">
+            <table id="requestTable">
+                <thead>
+                    <tr>
+                        <th class="col-time">Hora</th>
+                        <th class="col-method">Método</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-host">Host</th>
+                        <th class="col-url">URL</th>
+                        <th class="col-duration">Duração</th>
+                    </tr>
+                </thead>
+                <tbody id="requestList"></tbody>
+            </table>
+            <div class="empty-state" id="emptyState">
+                Nenhuma requisição interceptada ainda.<br>
+                <small>Configure seu proxy para <strong>localhost:8888</strong></small>
+            </div>
+        </div>
+
+        <aside class="detail-panel" id="detailPanel">
+            <div class="detail-header">
+                <h3>Detalhes</h3>
+                <button id="btnCloseDetail" class="btn-close">&times;</button>
+            </div>
+            <div class="detail-body" id="detailBody">
+                <p class="detail-placeholder">Clique em uma requisição para ver os detalhes</p>
+            </div>
+        </aside>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
