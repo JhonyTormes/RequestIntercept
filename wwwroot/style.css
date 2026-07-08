@@ -104,6 +104,9 @@ header {
 
 .btn:hover { opacity: .8; }
 
+.btn-primary { background: var(--accent); color: #1a1b26; }
+.btn-primary:hover { background: #89b4fa; }
+.btn-primary.active { background: var(--red); }
 .btn-warning { background: var(--yellow); color: #1a1b26; }
 .btn-danger { background: var(--red); color: #fff; }
 
@@ -210,15 +213,60 @@ main {
 .duration.medium { color: var(--yellow); }
 .duration.slow { color: var(--red); }
 
+.proxy-badge {
+    font-size: 0.5em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: 600;
+}
+
+.proxy-badge.on {
+    background: #1a3a2a;
+    color: var(--green);
+    border: 1px solid var(--green);
+}
+
+.proxy-badge.off {
+    background: #3a1a1a;
+    color: var(--red);
+    border: 1px solid var(--red);
+}
+
+.setup-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 20px;
+}
+
+.setup-icon {
+    font-size: 2em;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.setup-text {
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 0.95em;
+}
+
+.setup-text strong {
+    color: var(--text-bright);
+}
+
 .empty-state {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     text-align: center;
     color: var(--text);
     opacity: 0.6;
     line-height: 1.8;
+    padding: 40px;
 }
 
 .empty-state small {

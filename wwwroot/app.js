@@ -4,17 +4,23 @@ class RequestInterceptApp {
         this.selectedId = null;
         this.knownIds = new Set();
         this.pollInterval = null;
+        this.proxyEnabled = false;
 
         this.tableBody = document.getElementById('requestList');
+        this.requestTable = document.getElementById('requestTable');
         this.emptyState = document.getElementById('emptyState');
+        this.setupBanner = document.getElementById('setupBanner');
         this.detailPanel = document.getElementById('detailPanel');
         this.detailBody = document.getElementById('detailBody');
         this.countBadge = document.getElementById('countBadge');
         this.statusBadge = document.getElementById('statusBadge');
+        this.proxyBadge = document.getElementById('proxyBadge');
         this.btnPause = document.getElementById('btnPause');
         this.btnClear = document.getElementById('btnClear');
+        this.btnProxy = document.getElementById('btnProxy');
         this.btnCloseDetail = document.getElementById('btnCloseDetail');
 
+        this.btnProxy.addEventListener('click', () => this.toggleProxy());
         this.btnPause.addEventListener('click', () => this.togglePause());
         this.btnClear.addEventListener('click', () => this.clearRequests());
         this.btnCloseDetail.addEventListener('click', () => this.closeDetail());
@@ -29,13 +35,16 @@ class RequestInterceptApp {
 
     async poll() {
         try {
-            const [reqRes, statusRes] = await Promise.all([
+            const [reqRes, statusRes, proxyRes] = await Promise.all([
                 fetch('/api/requests'),
-                fetch('/api/status')
+                fetch('/api/status'),
+                fetch('/api/proxy')
             ]);
             const requests = await reqRes.json();
             const status = await statusRes.json();
+            const proxy = await proxyRes.json();
             this.requests = requests;
+            this.proxyEnabled = proxy.enabled;
             this.render(status);
         } catch (e) {
             console.error('Poll failed', e);
@@ -47,11 +56,23 @@ class RequestInterceptApp {
         this.requests.forEach(r => this.knownIds.add(r.id));
 
         this.countBadge.textContent = this.requests.length;
-        this.statusBadge.textContent = status.paused ? 'Pausado' : 'Ativo';
+
+        // Proxy status
+        this.proxyBadge.textContent = this.proxyEnabled ? 'Proxy ON' : 'Proxy OFF';
+        this.proxyBadge.className = `proxy-badge ${this.proxyEnabled ? 'on' : 'off'}`;
+        this.btnProxy.textContent = this.proxyEnabled ? 'Desativar Proxy' : 'Ativar Proxy';
+        this.btnProxy.className = `btn ${this.proxyEnabled ? 'btn-primary active' : 'btn-primary'}`;
+
+        // Capture status
+        this.statusBadge.textContent = status.paused ? 'Pausado' : 'Capturando';
         this.statusBadge.className = `status-badge ${status.paused ? 'paused' : 'active'}`;
         this.btnPause.textContent = status.paused ? 'Retomar' : 'Pausar';
 
-        this.emptyState.style.display = this.requests.length === 0 ? 'block' : 'none';
+        // Show/hide setup banner
+        const hasRequests = this.requests.length > 0;
+        this.setupBanner.style.display = hasRequests || this.proxyEnabled ? 'none' : 'flex';
+        this.requestTable.style.display = hasRequests ? '' : 'none';
+        this.emptyState.style.display = hasRequests ? 'none' : 'block';
 
         if (this.requests.length === 0) {
             this.tableBody.innerHTML = '';
@@ -83,7 +104,7 @@ class RequestInterceptApp {
                 tr.addEventListener('click', () => this.showDetail(r.id));
             }
 
-            if (newCount > 0 && r.id === this.requests[0]?.id) {
+            if (newCount > 0 && r === this.requests[0]) {
                 tr.style.animation = 'highlight 1s ease-out';
             }
 
@@ -96,6 +117,19 @@ class RequestInterceptApp {
         if (this.selectedId) {
             const detail = this.requests.find(r => r.id === this.selectedId);
             if (detail) this.renderDetail(detail);
+        }
+    }
+
+    async toggleProxy() {
+        const url = this.proxyEnabled ? '/api/proxy/disable' : '/api/proxy/enable';
+        try {
+            const res = await fetch(url, { method: 'POST' });
+            const data = await res.json();
+            if (data.enabled !== undefined) {
+                this.proxyEnabled = data.enabled;
+            }
+        } catch (e) {
+            console.error('Proxy toggle failed', e);
         }
     }
 
@@ -180,7 +214,7 @@ class RequestInterceptApp {
     }
 
     async togglePause() {
-        const paused = this.statusBadge.textContent === 'Ativo';
+        const paused = this.statusBadge.textContent === 'Capturando';
         const url = paused ? '/api/pause' : '/api/resume';
         await fetch(url, { method: 'POST' });
     }
@@ -250,7 +284,6 @@ class RequestInterceptApp {
     }
 }
 
-// CSS animation for new items
 const style = document.createElement('style');
 style.textContent = `
     @keyframes highlight {

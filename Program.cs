@@ -87,16 +87,71 @@ app.MapGet("/api/certificate", (CertificateService certService) =>
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine(@$"=============================================
+app.MapPost("/api/proxy/enable", (IConfiguration config) =>
+{
+    try
+    {
+        var port = config.GetValue<int>("Proxy:Port", 8888);
+        using var reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true);
+        if (reg is null) return Results.Problem("Failed to open registry");
+        reg.SetValue("ProxyEnable", 1, Microsoft.Win32.RegistryValueKind.DWord);
+        reg.SetValue("ProxyServer", $"localhost:{port}", Microsoft.Win32.RegistryValueKind.String);
+        reg.SetValue("ProxyHttp1.1", 0, Microsoft.Win32.RegistryValueKind.DWord);
+        return Results.Ok(new { enabled = true, message = "Proxy do Windows ativado" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}).ExcludeFromDescription();
+
+app.MapPost("/api/proxy/disable", () =>
+{
+    try
+    {
+        using var reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true);
+        if (reg is null) return Results.Problem("Failed to open registry");
+        reg.SetValue("ProxyEnable", 0, Microsoft.Win32.RegistryValueKind.DWord);
+        return Results.Ok(new { enabled = false, message = "Proxy do Windows desativado" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}).ExcludeFromDescription();
+
+app.MapGet("/api/proxy", () =>
+{
+    try
+    {
+        using var reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
+        var enabled = reg?.GetValue("ProxyEnable") is int val && val == 1;
+        var server = reg?.GetValue("ProxyServer") as string ?? "";
+        return Results.Ok(new { enabled, server });
+    }
+    catch
+    {
+        return Results.Ok(new { enabled = false, server = "" });
+    }
+}).ExcludeFromDescription();
+
+Console.WriteLine($@"=============================================
   RequestIntercept Proxy
 =============================================
   Web UI:    http://localhost:{webPort}
   Proxy:     0.0.0.0:{builder.Configuration.GetValue<int>("Proxy:Port", 8888)}
 
-  Configure your browser/OS to use the proxy above.
-  For HTTPS inspection, trust the CA certificate:
-  - Download at http://localhost:{webPort}/api/certificate
-  - Install as Trusted Root Certification Authority
+  Para comecar:
+
+  1. Acesse a Web UI: http://localhost:{webPort}
+  2. Clique em ""Ativar Proxy"" no topo da pagina
+  3. As requisicoes serao capturadas automaticamente
+
+  Para HTTPS, instale o certificado CA:
+     http://localhost:{webPort}/api/certificate
 =============================================");
 
 app.Run();

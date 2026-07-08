@@ -8,8 +8,12 @@
 </head>
 <body>
     <header>
-        <div class="logo">RequestIntercept</div>
+        <div class="logo">
+            RequestIntercept
+            <span class="proxy-badge" id="proxyBadge">Proxy OFF</span>
+        </div>
         <div class="header-controls">
+            <button id="btnProxy" class="btn btn-primary">Ativar Proxy</button>
             <span class="status-badge" id="statusBadge">Ativo</span>
             <span class="count-badge" id="countBadge">0</span>
             <button id="btnPause" class="btn btn-warning">Pausar</button>
@@ -19,7 +23,14 @@
 
     <main>
         <div class="table-container">
-            <table id="requestTable">
+            <div class="setup-banner" id="setupBanner">
+                <div class="setup-icon">&#9881;</div>
+                <div class="setup-text">
+                    <strong>Nenhuma requisição capturada ainda</strong><br>
+                    <span>Clique em <strong>"Ativar Proxy"</strong> no topo para começar a interceptar o tráfego do Windows automaticamente.</span>
+                </div>
+            </div>
+            <table id="requestTable" style="display:none">
                 <thead>
                     <tr>
                         <th class="col-time">Hora</th>
