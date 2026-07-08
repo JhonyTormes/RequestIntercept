@@ -14,6 +14,7 @@ public class CertificateService
     private static readonly RSASignaturePadding Padding = RSASignaturePadding.Pkcs1;
 
     public string? CaCertificatePath => _caCertPath;
+    public X509Certificate2? CaCertificate => _caCertificate;
 
     public CertificateService(string storagePath)
     {
@@ -86,6 +87,44 @@ public class CertificateService
         var result = X509CertificateLoader.LoadPkcs12(pfxBytes, (string?)null,
             X509KeyStorageFlags.Exportable);
         return result;
+    }
+
+    public (bool Success, string Message) InstallCaCertificate()
+    {
+        if (_caCertificate is null)
+            return (false, "Certificado CA nao foi gerado");
+
+        try
+        {
+            // Try LocalMachine\Root first (requires admin), fall back to CurrentUser\Root
+            var storeName = StoreName.Root;
+            var storeLocation = StoreLocation.LocalMachine;
+            try
+            {
+                using var store = new X509Store(storeName, storeLocation, OpenFlags.ReadWrite);
+                store.Open(OpenFlags.ReadWrite);
+                if (store.Certificates.Find(X509FindType.FindBySubjectName, "RequestIntercept Root CA", false).Count > 0)
+                    return (true, "Certificado CA ja esta instalado");
+                store.Add(_caCertificate);
+                store.Close();
+                return (true, "Certificado CA instalado com sucesso em Trusted Root (maquina)");
+            }
+            catch
+            {
+                storeLocation = StoreLocation.CurrentUser;
+                using var store = new X509Store(storeName, storeLocation, OpenFlags.ReadWrite);
+                store.Open(OpenFlags.ReadWrite);
+                if (store.Certificates.Find(X509FindType.FindBySubjectName, "RequestIntercept Root CA", false).Count > 0)
+                    return (true, "Certificado CA ja esta instalado");
+                store.Add(_caCertificate);
+                store.Close();
+                return (true, "Certificado CA instalado em Trusted Root (usuario). Para instalacao completa, execute como administrador.");
+            }
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Erro ao instalar certificado: {ex.Message}");
+        }
     }
 
     public void Dispose()

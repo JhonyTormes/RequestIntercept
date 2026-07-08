@@ -85,6 +85,12 @@ app.MapGet("/api/certificate", (CertificateService certService) =>
     return Results.File(bytes, "application/x-x509-ca-cert", "requestintercept-ca.crt");
 });
 
+app.MapPost("/api/certificate/install", (CertificateService certService) =>
+{
+    var (success, message) = certService.InstallCaCertificate();
+    return success ? Results.Ok(new { installed = true, message }) : Results.Ok(new { installed = false, message });
+});
+
 app.MapFallbackToFile("index.html");
 
 app.MapPost("/api/proxy/enable", (IConfiguration config) =>

@@ -19,8 +19,10 @@ class RequestInterceptApp {
         this.btnClear = document.getElementById('btnClear');
         this.btnProxy = document.getElementById('btnProxy');
         this.btnCloseDetail = document.getElementById('btnCloseDetail');
+        this.btnInstallCert = document.getElementById('btnInstallCert');
 
         this.btnProxy.addEventListener('click', () => this.toggleProxy());
+        this.btnInstallCert.addEventListener('click', () => this.installCert());
         this.btnPause.addEventListener('click', () => this.togglePause());
         this.btnClear.addEventListener('click', () => this.clearRequests());
         this.btnCloseDetail.addEventListener('click', () => this.closeDetail());
@@ -223,6 +225,21 @@ class RequestInterceptApp {
         await fetch('/api/requests', { method: 'DELETE' });
         this.knownIds.clear();
         this.closeDetail();
+    }
+
+    async installCert() {
+        this.btnInstallCert.disabled = true;
+        this.btnInstallCert.textContent = 'Instalando...';
+        try {
+            const res = await fetch('/api/certificate/install', { method: 'POST' });
+            const data = await res.json();
+            alert(data.message);
+        } catch (e) {
+            alert('Erro ao instalar certificado: ' + e.message);
+        } finally {
+            this.btnInstallCert.disabled = false;
+            this.btnInstallCert.textContent = 'Instalar Certificado CA';
+        }
     }
 
     statusClass(code) {

@@ -107,6 +107,8 @@ header {
 .btn-primary { background: var(--accent); color: #1a1b26; }
 .btn-primary:hover { background: #89b4fa; }
 .btn-primary.active { background: var(--red); }
+.btn-secondary { background: var(--surface2); color: var(--text-bright); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
 .btn-warning { background: var(--yellow); color: #1a1b26; }
 .btn-danger { background: var(--red); color: #fff; }
 
