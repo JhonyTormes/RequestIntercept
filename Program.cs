@@ -1,8 +1,20 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
 using RequestIntercept.Models;
 using RequestIntercept.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Load embedded appsettings.json if available
+var assembly = typeof(Program).Assembly;
+var embeddedNs = assembly.GetName().Name + ".wwwroot";
+var embeddedRes = assembly.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith("appsettings.json"));
+if (embeddedRes is not null)
+{
+    using var stream = assembly.GetManifestResourceStream(embeddedRes);
+    if (stream is not null)
+        builder.Configuration.AddJsonStream(stream);
+}
 
 builder.Services.AddSingleton<CertificateService>(_ =>
 {
@@ -19,12 +31,20 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{webPort}");
 
 var app = builder.Build();
 
+var embeddedProvider = new EmbeddedFileProvider(assembly, embeddedNs);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
+    app.UseStaticFiles();
 }
-
-app.UseStaticFiles();
+else
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = embeddedProvider
+    });
+}
 
 // ---- API Endpoints ----
 
@@ -91,7 +111,16 @@ app.MapPost("/api/certificate/install", (CertificateService certService) =>
     return success ? Results.Ok(new { installed = true, message }) : Results.Ok(new { installed = false, message });
 });
 
-app.MapFallbackToFile("index.html");
+app.MapFallback(async (HttpContext context) =>
+{
+    var file = embeddedProvider.GetFileInfo("index.html");
+    if (file.Exists)
+    {
+        context.Response.ContentType = "text/html";
+        using var stream = file.CreateReadStream();
+        await stream.CopyToAsync(context.Response.Body);
+    }
+});
 
 app.MapPost("/api/proxy/enable", (IConfiguration config) =>
 {
