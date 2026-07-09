@@ -2,6 +2,7 @@ class RequestInterceptApp {
     constructor() {
         this.requests = [];
         this.selectedId = null;
+        this.currentDetail = null;
         this.knownIds = new Set();
         this.pollInterval = null;
         this.proxyEnabled = false;
@@ -20,12 +21,23 @@ class RequestInterceptApp {
         this.btnProxy = document.getElementById('btnProxy');
         this.btnCloseDetail = document.getElementById('btnCloseDetail');
         this.btnInstallCert = document.getElementById('btnInstallCert');
+        this.btnCopyCurlCmd = document.getElementById('btnCopyCurlCmd');
+        this.btnCopyCurlPs = document.getElementById('btnCopyCurlPs');
+        this.filterInput = document.getElementById('filterInput');
+        this.filterText = '';
+
+        this.filterInput.addEventListener('input', (e) => {
+            this.filterText = e.target.value.toLowerCase();
+            this.renderRequests();
+        });
 
         this.btnProxy.addEventListener('click', () => this.toggleProxy());
         this.btnInstallCert.addEventListener('click', () => this.installCert());
         this.btnPause.addEventListener('click', () => this.togglePause());
         this.btnClear.addEventListener('click', () => this.clearRequests());
         this.btnCloseDetail.addEventListener('click', () => this.closeDetail());
+        this.btnCopyCurlCmd.addEventListener('click', () => this.copyAsCurl('cmd'));
+        this.btnCopyCurlPs.addEventListener('click', () => this.copyAsCurl('powershell'));
 
         this.startPolling();
     }
@@ -54,35 +66,48 @@ class RequestInterceptApp {
     }
 
     render(status) {
-        const newCount = this.requests.filter(r => !this.knownIds.has(r.id)).length;
         this.requests.forEach(r => this.knownIds.add(r.id));
 
         this.countBadge.textContent = this.requests.length;
 
-        // Proxy status
         this.proxyBadge.textContent = this.proxyEnabled ? 'Proxy ON' : 'Proxy OFF';
         this.proxyBadge.className = `proxy-badge ${this.proxyEnabled ? 'on' : 'off'}`;
         this.btnProxy.textContent = this.proxyEnabled ? 'Desativar Proxy' : 'Ativar Proxy';
         this.btnProxy.className = `btn ${this.proxyEnabled ? 'btn-primary active' : 'btn-primary'}`;
 
-        // Capture status
         this.statusBadge.textContent = status.paused ? 'Pausado' : 'Capturando';
         this.statusBadge.className = `status-badge ${status.paused ? 'paused' : 'active'}`;
         this.btnPause.textContent = status.paused ? 'Retomar' : 'Pausar';
 
-        // Show/hide setup banner
-        const hasRequests = this.requests.length > 0;
-        this.setupBanner.style.display = hasRequests || this.proxyEnabled ? 'none' : 'flex';
+        this.renderRequests();
+
+        if (this.selectedId && this.currentDetail) {
+            this.renderDetail(this.currentDetail);
+        }
+    }
+
+    renderRequests() {
+        const filtered = this.filterText
+            ? this.requests.filter(r =>
+                (r.url && r.url.toLowerCase().includes(this.filterText)) ||
+                (r.host && r.host.toLowerCase().includes(this.filterText))
+              )
+            : this.requests;
+
+        const hasRequests = filtered.length > 0;
+        this.setupBanner.style.display = this.requests.length === 0 && !this.proxyEnabled ? 'flex' : 'none';
         this.requestTable.style.display = hasRequests ? '' : 'none';
         this.emptyState.style.display = hasRequests ? 'none' : 'block';
+        this.emptyState.textContent = hasRequests ? '' :
+            (this.filterText ? 'Nenhuma requisicao encontrada para este filtro.' : 'Nenhuma requisicao interceptada ainda.');
 
-        if (this.requests.length === 0) {
+        if (!hasRequests) {
             this.tableBody.innerHTML = '';
             return;
         }
 
         const frag = document.createDocumentFragment();
-        for (const r of this.requests) {
+        for (const r of filtered) {
             const tr = document.createElement('tr');
             tr.dataset.id = r.id;
             if (r.error) tr.classList.add('error');
@@ -106,20 +131,11 @@ class RequestInterceptApp {
                 tr.addEventListener('click', () => this.showDetail(r.id));
             }
 
-            if (newCount > 0 && r === this.requests[0]) {
-                tr.style.animation = 'highlight 1s ease-out';
-            }
-
             frag.appendChild(tr);
         }
 
         this.tableBody.innerHTML = '';
         this.tableBody.appendChild(frag);
-
-        if (this.selectedId) {
-            const detail = this.requests.find(r => r.id === this.selectedId);
-            if (detail) this.renderDetail(detail);
-        }
     }
 
     async toggleProxy() {
@@ -139,6 +155,7 @@ class RequestInterceptApp {
         this.selectedId = id;
         const res = await fetch(`/api/requests/${id}`);
         const detail = await res.json();
+        this.currentDetail = detail;
         this.detailPanel.classList.remove('hidden');
         this.renderDetail(detail);
 
@@ -212,6 +229,7 @@ class RequestInterceptApp {
     closeDetail() {
         this.detailPanel.classList.add('hidden');
         this.selectedId = null;
+        this.currentDetail = null;
         document.querySelectorAll('#requestList tr').forEach(tr => tr.classList.remove('selected'));
     }
 
@@ -225,6 +243,38 @@ class RequestInterceptApp {
         await fetch('/api/requests', { method: 'DELETE' });
         this.knownIds.clear();
         this.closeDetail();
+    }
+
+    copyAsCurl(shell) {
+        const r = this.currentDetail;
+        if (!r) return;
+        const curlBin = shell === 'powershell' ? 'curl.exe' : 'curl';
+        const q = '"';
+        const parts = [`${curlBin} -X ${r.method} ${q}${r.url}${q}`];
+        if (r.requestHeaders) {
+            const skip = ['host', 'content-length', 'proxy-connection'];
+            for (const [name, values] of Object.entries(r.requestHeaders)) {
+                if (skip.includes(name.toLowerCase())) continue;
+                const val = Array.isArray(values) ? values.join(', ') : values;
+                const escaped = val.replace(/"/g, '""');
+                parts.push(`-H ${q}${name}: ${escaped}${q}`);
+            }
+        }
+        if (r.requestBody && !r.requestBody.startsWith('[Binary')) {
+            const escaped = r.requestBody.replace(/"/g, '""');
+            parts.push(`-d ${q}${escaped}${q}`);
+        }
+        const text = parts.join(' ^\n  ');
+        navigator.clipboard.writeText(text).then(() => {
+            const prev = this.btnCopyCurlCmd.textContent;
+            if (shell === 'cmd') {
+                this.btnCopyCurlCmd.textContent = 'Copiado!';
+                setTimeout(() => this.btnCopyCurlCmd.textContent = prev, 2000);
+            } else {
+                this.btnCopyCurlPs.textContent = 'Copiado!';
+                setTimeout(() => this.btnCopyCurlPs.textContent = prev, 2000);
+            }
+        }).catch(e => alert('Erro ao copiar: ' + e.message));
     }
 
     async installCert() {

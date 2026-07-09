@@ -17,6 +17,7 @@
             <button id="btnInstallCert" class="btn btn-secondary" title="Instalar certificado CA no Windows para evitar warnings de HTTPS">Instalar Certificado CA</button>
             <span class="status-badge" id="statusBadge">Ativo</span>
             <span class="count-badge" id="countBadge">0</span>
+            <input id="filterInput" class="filter-input" type="text" placeholder="Filtrar URL..." title="Filtrar requisicoes pelo texto na URL">
             <button id="btnPause" class="btn btn-warning">Pausar</button>
             <button id="btnClear" class="btn btn-danger">Limpar</button>
         </div>
@@ -53,7 +54,11 @@
         <aside class="detail-panel" id="detailPanel">
             <div class="detail-header">
                 <h3>Detalhes</h3>
-                <button id="btnCloseDetail" class="btn-close">&times;</button>
+                <div class="detail-header-actions">
+                    <button id="btnCopyCurlCmd" class="btn btn-small btn-secondary" title="Copiar comando curl para CMD">Copiar Curl (CMD)</button>
+                    <button id="btnCopyCurlPs" class="btn btn-small btn-secondary" title="Copiar comando curl para PowerShell">Copiar Curl (PowerShell)</button>
+                    <button id="btnCloseDetail" class="btn-close">&times;</button>
+                </div>
             </div>
             <div class="detail-body" id="detailBody">
                 <p class="detail-placeholder">Clique em uma requisição para ver os detalhes</p>

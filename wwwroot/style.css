@@ -109,8 +109,23 @@ header {
 .btn-primary.active { background: var(--red); }
 .btn-secondary { background: var(--surface2); color: var(--text-bright); border: 1px solid var(--border); }
 .btn-secondary:hover { background: var(--border); }
+.btn-small { padding: 4px 10px; font-size: 0.75em; }
 .btn-warning { background: var(--yellow); color: #1a1b26; }
 .btn-danger { background: var(--red); color: #fff; }
+
+.filter-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--text-bright);
+    font-size: 0.85em;
+    width: 200px;
+    outline: none;
+    transition: border-color .2s;
+}
+.filter-input::placeholder { color: var(--text); opacity: 0.5; }
+.filter-input:focus { border-color: var(--accent); }
 
 main {
     display: flex;
@@ -294,9 +309,16 @@ main {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    gap: 8px;
+}
+
+.detail-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .detail-header h3 {

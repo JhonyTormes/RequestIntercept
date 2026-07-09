@@ -455,29 +455,41 @@ public class ProxyService : BackgroundService
         return (hostPort, defaultPort);
     }
 
+    private static readonly HashSet<string> TextContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "text/plain", "text/html", "text/xml", "text/css", "text/csv",
+        "application/json", "application/xml", "application/xhtml+xml",
+        "application/x-www-form-urlencoded",
+        "application/javascript", "application/ecmascript",
+    };
+
     private static string? TryDecodeBody(Dictionary<string, string[]> headers, byte[] body)
     {
         if (body.Length == 0) return null;
 
-        var encoding = BodyEncoding;
+        var contentType = "";
         if (headers.TryGetValue("content-type", out var ct))
+            contentType = string.Join(" ", ct).Split(';')[0].Trim().ToLowerInvariant();
+
+        var isTextType = !string.IsNullOrEmpty(contentType) &&
+            (TextContentTypes.Contains(contentType) || contentType.StartsWith("text/"));
+
+        if (isTextType)
         {
-            var ctStr = string.Join(" ", ct);
-            if (ctStr.Contains("utf-8", StringComparison.OrdinalIgnoreCase) ||
-                ctStr.Contains("text", StringComparison.OrdinalIgnoreCase) ||
-                ctStr.Contains("json", StringComparison.OrdinalIgnoreCase) ||
-                ctStr.Contains("xml", StringComparison.OrdinalIgnoreCase) ||
-                ctStr.Contains("html", StringComparison.OrdinalIgnoreCase) ||
-                ctStr.Contains("form-urlencoded", StringComparison.OrdinalIgnoreCase))
-            {
-                try { return BodyEncoding.GetString(body); }
-                catch { return $"[Binary data: {body.Length} bytes]"; }
-            }
+            try { return BodyEncoding.GetString(body); }
+            catch { return $"[Binary data: {body.Length} bytes]"; }
         }
 
-        // Try UTF-8 as default
-        try { return BodyEncoding.GetString(body); }
+        // Try UTF-8 decode and check if result looks like text
+        string decoded;
+        try { decoded = BodyEncoding.GetString(body); }
         catch { return $"[Binary data: {body.Length} bytes]"; }
+
+        var nonPrintable = decoded.Count(c => c != '\n' && c != '\r' && c != '\t' && !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && !char.IsPunctuation(c));
+        if ((double)nonPrintable / Math.Max(decoded.Length, 1) > 0.3)
+            return $"[Binary data: {body.Length} bytes]";
+
+        return decoded;
     }
 
     private static bool ShouldKeepAlive(Dictionary<string, string[]> headers)
