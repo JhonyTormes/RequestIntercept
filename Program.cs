@@ -75,6 +75,71 @@ app.MapDelete("/api/requests", (RequestStore store) =>
     return Results.NoContent();
 });
 
+app.MapGet("/api/requests/export", (RequestStore store) =>
+{
+    var requests = store.GetAll();
+    var entries = requests.Select(r =>
+    {
+        var reqHeaders = r.RequestHeaders?.SelectMany(kv =>
+            kv.Value.Select(v => new { name = kv.Key, value = v })).ToArray() ?? [];
+        var respHeaders = r.ResponseHeaders?.SelectMany(kv =>
+            kv.Value.Select(v => new { name = kv.Key, value = v })).ToArray() ?? [];
+
+        return new
+        {
+            startedDateTime = r.Timestamp.ToString("o"),
+            time = r.DurationMs,
+            request = new
+            {
+                method = r.Method,
+                url = r.Url,
+                httpVersion = "HTTP/1.1",
+                cookies = Array.Empty<object>(),
+                headers = reqHeaders,
+                queryString = Array.Empty<object>(),
+                postData = r.RequestBody is not null ? new { mimeType = GetContentType(r.RequestHeaders), text = r.RequestBody } : null,
+                headersSize = -1,
+                bodySize = r.RequestBody?.Length ?? -1
+            },
+            response = r.StatusCode.HasValue ? new
+            {
+                status = r.StatusCode.Value,
+                statusText = "",
+                httpVersion = "HTTP/1.1",
+                cookies = Array.Empty<object>(),
+                headers = respHeaders,
+                content = new
+                {
+                    size = r.ResponseBody?.Length ?? 0,
+                    mimeType = GetContentType(r.ResponseHeaders),
+                    text = r.ResponseBody
+                },
+                redirectURL = "",
+                headersSize = -1,
+                bodySize = r.ResponseBody?.Length ?? -1
+            } : null,
+            cache = new { },
+            timings = new { send = 0, wait = r.DurationMs, receive = 0 }
+        };
+    }).ToList();
+
+    var har = new
+    {
+        log = new
+        {
+            version = "1.2",
+            creator = new { name = "RequestIntercept", version = "1.0" },
+            entries
+        }
+    };
+
+    return Results.Json(har, new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+    }, "application/json", statusCode: 200);
+});
+
 app.MapGet("/api/status", ([FromServices] RequestStore store, [FromServices] ProxyService proxy) =>
     Results.Ok(new
     {
@@ -190,3 +255,11 @@ Console.WriteLine($@"=============================================
 =============================================");
 
 app.Run();
+
+static string GetContentType(Dictionary<string, string[]>? headers)
+{
+    if (headers is null) return "application/octet-stream";
+    if (headers.TryGetValue("content-type", out var ct) && ct.Length > 0)
+        return ct[0].Split(';')[0].Trim();
+    return "application/octet-stream";
+}

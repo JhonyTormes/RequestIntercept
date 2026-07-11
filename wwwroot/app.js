@@ -23,6 +23,7 @@ class RequestInterceptApp {
         this.btnInstallCert = document.getElementById('btnInstallCert');
         this.btnCopyCurlCmd = document.getElementById('btnCopyCurlCmd');
         this.btnCopyCurlPs = document.getElementById('btnCopyCurlPs');
+        this.btnExport = document.getElementById('btnExport');
         this.filterInput = document.getElementById('filterInput');
         this.filterText = '';
 
@@ -38,6 +39,7 @@ class RequestInterceptApp {
         this.btnCloseDetail.addEventListener('click', () => this.closeDetail());
         this.btnCopyCurlCmd.addEventListener('click', () => this.copyAsCurl('cmd'));
         this.btnCopyCurlPs.addEventListener('click', () => this.copyAsCurl('powershell'));
+        this.btnExport.addEventListener('click', () => this.exportHar());
 
         this.startPolling();
     }
@@ -275,6 +277,10 @@ class RequestInterceptApp {
                 setTimeout(() => this.btnCopyCurlPs.textContent = prev, 2000);
             }
         }).catch(e => alert('Erro ao copiar: ' + e.message));
+    }
+
+    async exportHar() {
+        window.open('/api/requests/export', '_blank');
     }
 
     async installCert() {
