@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Net.Http;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
 using RequestIntercept.Models;
@@ -67,6 +70,66 @@ app.MapGet("/api/requests/{id:guid}", (Guid id, RequestStore store) =>
 {
     var r = store.GetById(id);
     return r is null ? Results.NotFound() : Results.Ok(r);
+});
+
+app.MapPost("/api/requests/{id:guid}/replay", async (Guid id, RequestStore store) =>
+{
+    var original = store.GetById(id);
+    if (original is null) return Results.NotFound();
+    if (original.RequestBody is { } b && b.StartsWith("[Binary"))
+        return Results.BadRequest("Cannot replay request with binary body");
+
+    using var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false });
+    httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+    using var httpRequest = new HttpRequestMessage(new HttpMethod(original.Method), original.Url);
+
+    if (original.RequestHeaders is not null)
+    {
+        foreach (var (name, values) in original.RequestHeaders)
+        {
+            var lower = name.ToLowerInvariant();
+            if (lower is "host" or "content-length" or "transfer-encoding" or "connection" or "proxy-connection")
+                continue;
+            foreach (var v in values)
+                httpRequest.Headers.TryAddWithoutValidation(name, v);
+        }
+    }
+
+    if (original.RequestBody is not null)
+    {
+        httpRequest.Content = new StringContent(original.RequestBody, Encoding.UTF8,
+            GetContentType(original.RequestHeaders));
+    }
+
+    var sw = Stopwatch.StartNew();
+    using var response = await httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseContentRead);
+    sw.Stop();
+
+    var responseBody = await response.Content.ReadAsStringAsync();
+
+    var allHeaders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+    foreach (var h in response.Headers)
+        allHeaders[h.Key] = h.Value.ToArray();
+    foreach (var h in response.Content.Headers)
+        allHeaders[h.Key] = h.Value.ToArray();
+
+    var record = new InterceptedRequest
+    {
+        Method = original.Method,
+        Url = original.Url,
+        Host = original.Host,
+        IsHttps = original.IsHttps,
+        RequestHeaders = original.RequestHeaders,
+        RequestBody = original.RequestBody,
+        StatusCode = (int)response.StatusCode,
+        ResponseHeaders = allHeaders,
+        ResponseBody = responseBody,
+        DurationMs = sw.ElapsedMilliseconds
+    };
+    store.Add(record);
+
+    return Results.Ok(record);
 });
 
 app.MapDelete("/api/requests", (RequestStore store) =>

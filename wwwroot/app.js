@@ -24,6 +24,7 @@ class RequestInterceptApp {
         this.btnCopyCurlCmd = document.getElementById('btnCopyCurlCmd');
         this.btnCopyCurlPs = document.getElementById('btnCopyCurlPs');
         this.btnExport = document.getElementById('btnExport');
+        this.btnReplay = document.getElementById('btnReplay');
         this.filterInput = document.getElementById('filterInput');
         this.filterText = '';
 
@@ -40,6 +41,7 @@ class RequestInterceptApp {
         this.btnCopyCurlCmd.addEventListener('click', () => this.copyAsCurl('cmd'));
         this.btnCopyCurlPs.addEventListener('click', () => this.copyAsCurl('powershell'));
         this.btnExport.addEventListener('click', () => this.exportHar());
+        this.btnReplay.addEventListener('click', () => this.replayRequest());
 
         this.startPolling();
     }
@@ -281,6 +283,29 @@ class RequestInterceptApp {
 
     async exportHar() {
         window.open('/api/requests/export', '_blank');
+    }
+
+    async replayRequest() {
+        if (!this.selectedId) return;
+        this.btnReplay.disabled = true;
+        this.btnReplay.textContent = 'Reenviando...';
+        try {
+            const res = await fetch(`/api/requests/${this.selectedId}/replay`, { method: 'POST' });
+            if (!res.ok) {
+                const err = await res.text();
+                alert('Erro ao reenviar: ' + err);
+                return;
+            }
+            const data = await res.json();
+            this.selectedId = data.id;
+            this.currentDetail = data;
+            this.renderDetail(data);
+        } catch (e) {
+            alert('Erro ao reenviar: ' + e.message);
+        } finally {
+            this.btnReplay.disabled = false;
+            this.btnReplay.textContent = 'Reenviar';
+        }
     }
 
     async installCert() {
