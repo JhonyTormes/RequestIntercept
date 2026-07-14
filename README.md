@@ -15,6 +15,7 @@ Proxy interceptador HTTP/HTTPS com MITM (Man-in-the-Middle) para inspecionar req
 - ✅ **Filtro por URL** — digite texto para filtrar requisições na lista
 - ✅ **Copiar como cURL** — gera o comando curl para CMD ou PowerShell
 - ✅ **Reenviar requisição** — replay com um clique no painel de detalhes
+- ✅ **Breakpoints** — pause requisições específicas para inspecionar antes de encaminhar
 - ✅ **Exportar HAR** — baixa todas as requisições no formato HTTP Archive
 - ✅ Zero instalação — apenas executa e usa
 - ✅ Single-file publish — gera um único `.exe` portável (~95 MB)
@@ -65,6 +66,25 @@ Gera `publish\RequestIntercept.exe` — único arquivo, copie para qualquer past
 | **Pausar/Retomar** | Pausa ou retoma a captura de novas requisições |
 | **Limpar** | Remove todas as requisições da lista |
 | **Exportar HAR** | Baixa as requisições em formato HAR (HTTP Archive) |
+| **Breakpoints OFF/ON** | Ativa/desativa o modo breakpoint |
+| **Breakpoint patterns** | Campo de texto com padrões de URL separados por vírgula (ex: `ifood, api`) |
+
+### Breakpoints
+
+O modo **Breakpoint** permite pausar requisições específicas antes de serem encaminhadas ao servidor, para inspeção e decisão manual.
+
+**Como usar:**
+
+1. Clique em **"Breakpoints OFF"** no header para ativar
+2. Digite os padrões de URL no campo ao lado (ex: `ifood, mega, api`)
+   - Use `*` para pausar **todas** as requisições
+   - Separe múltiplos padrões com vírgula
+3. Quando uma requisição corresponde a um padrão, ela é **pausada** e um painel laranja aparece no topo
+4. No painel você pode:
+   - **Continuar** — a requisição segue para o servidor e a resposta é capturada normalmente
+   - **Descartar** — a requisição é cancelada sem encaminhar ao servidor
+   - **Continuar Todas / Descartar Todas** — ação em lote para todas as pausadas
+5. Se nenhuma ação for tomada em 2 minutos, a requisição é descartada automaticamente
 
 ### Painel de Detalhes
 
@@ -105,6 +125,12 @@ Se o `content-type` não for texto (`text/*`, `application/json`, `application/x
 | `POST` | `/api/proxy/disable` | Desativa proxy do Windows |
 | `GET` | `/api/certificate` | Download do certificado CA (.crt) |
 | `POST` | `/api/certificate/install` | Instala CA no Trusted Root do Windows |
+| `GET` | `/api/breakpoints` | Status dos breakpoints (ligado/desligado, patterns, paused) |
+| `POST` | `/api/breakpoints/enable` | Ativa o modo breakpoint |
+| `POST` | `/api/breakpoints/disable` | Desativa o modo breakpoint |
+| `POST` | `/api/breakpoints/patterns` | Define padrões de URL (body JSON: `["padrao1", "padrao2"]`) |
+| `POST` | `/api/breakpoints/{id}/continue` | Continua uma requisição pausada |
+| `POST` | `/api/breakpoints/{id}/drop` | Descarta uma requisição pausada |
 
 ## Testando com curl
 
@@ -172,11 +198,13 @@ RequestIntercept/
 ├── RequestIntercept.csproj             # Projeto .NET 9
 ├── appsettings.json                    # Configuração (portas, logging)
 ├── Models/
-│   └── InterceptedRequest.cs           # Modelo de dados da requisição
+│   ├── InterceptedRequest.cs           # Modelo de dados da requisição
+│   └── BreakpointItem.cs               # Modelo de breakpoint
 ├── Services/
 │   ├── CertificateService.cs           # Geração de CA e certificados TLS
 │   ├── ProxyService.cs                 # Proxy TCP (HTTP + HTTPS MITM)
-│   └── RequestStore.cs                 # Armazenamento em memória
+│   ├── RequestStore.cs                 # Armazenamento em memória
+│   └── BreakpointService.cs            # Gerenciamento de breakpoints
 └── wwwroot/
     ├── index.html                      # Interface web
     ├── style.css                       # Estilos (tema escuro)
