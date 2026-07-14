@@ -15,6 +15,7 @@ public class ProxyService : BackgroundService
     private readonly ILogger<ProxyService> _logger;
     private readonly CertificateService _certService;
     private readonly RequestStore _store;
+    private readonly BreakpointService _breakpointService;
     private readonly int _proxyPort;
     private TcpListener? _listener;
     private static readonly Encoding HeaderEncoding = Encoding.ASCII;
@@ -24,11 +25,12 @@ public class ProxyService : BackgroundService
     public int ProxyPort { get; }
 
     public ProxyService(ILogger<ProxyService> logger, CertificateService certService,
-        RequestStore store, IConfiguration config)
+        RequestStore store, BreakpointService breakpointService, IConfiguration config)
     {
         _logger = logger;
         _certService = certService;
         _store = store;
+        _breakpointService = breakpointService;
         _proxyPort = config.GetValue<int>("Proxy:Port", 8888);
         ProxyPort = _proxyPort;
     }
@@ -152,6 +154,7 @@ public class ProxyService : BackgroundService
             var (headers, bodyBytes) = await ReadRequestDetails(clientSsl, ct, method);
 
             var sw = Stopwatch.StartNew();
+            var decodedBody = bodyBytes is not null ? TryDecodeBody(headers, bodyBytes) : null;
             var record = new InterceptedRequest
             {
                 Method = method,
@@ -159,8 +162,16 @@ public class ProxyService : BackgroundService
                 Host = hostname,
                 IsHttps = true,
                 RequestHeaders = headers,
-                RequestBody = bodyBytes is not null ? TryDecodeBody(headers, bodyBytes) : null
+                RequestBody = decodedBody
             };
+
+            if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
+            {
+                record.Error = "Interrompido pelo breakpoint";
+                record.DurationMs = sw.ElapsedMilliseconds;
+                _store.Add(record);
+                break;
+            }
 
             try
             {
@@ -209,6 +220,7 @@ public class ProxyService : BackgroundService
         var (headers, bodyBytes) = await ReadRequestDetails(clientStream, ct, method);
 
         var sw = Stopwatch.StartNew();
+        var decodedBody = bodyBytes is not null ? TryDecodeBody(headers, bodyBytes) : null;
         var record = new InterceptedRequest
         {
             Method = method,
@@ -216,8 +228,16 @@ public class ProxyService : BackgroundService
             Host = hostname,
             IsHttps = false,
             RequestHeaders = headers,
-            RequestBody = bodyBytes is not null ? TryDecodeBody(headers, bodyBytes) : null
+            RequestBody = decodedBody
         };
+
+        if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
+        {
+            record.Error = "Interrompido pelo breakpoint";
+            record.DurationMs = sw.ElapsedMilliseconds;
+            _store.Add(record);
+            return;
+        }
 
         try
         {
@@ -245,6 +265,31 @@ public class ProxyService : BackgroundService
             record.Error = ex.Message;
             record.DurationMs = sw.ElapsedMilliseconds;
             _store.Add(record);
+        }
+    }
+
+    private async Task<bool> CheckBreakpointAsync(InterceptedRequest record,
+        Dictionary<string, string[]> headers, byte[]? bodyBytes, CancellationToken ct)
+    {
+        if (!_breakpointService.ShouldBreak(record.Url))
+            return true;
+
+        var tcs = new TaskCompletionSource<bool>();
+        _breakpointService.Register(record.Method, record.Url, record.Host,
+            headers, record.RequestBody, bodyBytes, tcs);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(120));
+        try
+        {
+            await using (cts.Token.Register(() => tcs.TrySetResult(false)))
+            {
+                return await tcs.Task;
+            }
+        }
+        catch
+        {
+            return false;
         }
     }
 

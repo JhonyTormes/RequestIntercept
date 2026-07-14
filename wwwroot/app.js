@@ -25,6 +25,15 @@ class RequestInterceptApp {
         this.btnCopyCurlPs = document.getElementById('btnCopyCurlPs');
         this.btnExport = document.getElementById('btnExport');
         this.btnReplay = document.getElementById('btnReplay');
+        this.btnBreakpoints = document.getElementById('btnBreakpoints');
+        this.bpPatternInput = document.getElementById('bpPatternInput');
+        this.breakpointPanel = document.getElementById('breakpointPanel');
+        this.bpList = document.getElementById('bpList');
+        this.bpCount = document.getElementById('bpCount');
+        this.btnBpContinueAll = document.getElementById('btnBpContinueAll');
+        this.btnBpDropAll = document.getElementById('btnBpDropAll');
+        this.bpEnabled = false;
+        this.bpPaused = [];
         this.filterInput = document.getElementById('filterInput');
         this.filterText = '';
 
@@ -42,6 +51,10 @@ class RequestInterceptApp {
         this.btnCopyCurlPs.addEventListener('click', () => this.copyAsCurl('powershell'));
         this.btnExport.addEventListener('click', () => this.exportHar());
         this.btnReplay.addEventListener('click', () => this.replayRequest());
+        this.btnBreakpoints.addEventListener('click', () => this.toggleBreakpoints());
+        this.btnBpContinueAll.addEventListener('click', () => this.bpContinueAll());
+        this.btnBpDropAll.addEventListener('click', () => this.bpDropAll());
+        this.bpPatternInput.addEventListener('change', () => this.bpSetPatterns());
 
         this.startPolling();
     }
@@ -53,17 +66,22 @@ class RequestInterceptApp {
 
     async poll() {
         try {
-            const [reqRes, statusRes, proxyRes] = await Promise.all([
+            const [reqRes, statusRes, proxyRes, bpRes] = await Promise.all([
                 fetch('/api/requests'),
                 fetch('/api/status'),
-                fetch('/api/proxy')
+                fetch('/api/proxy'),
+                fetch('/api/breakpoints')
             ]);
             const requests = await reqRes.json();
             const status = await statusRes.json();
             const proxy = await proxyRes.json();
+            const bp = await bpRes.json();
             this.requests = requests;
             this.proxyEnabled = proxy.enabled;
+            this.bpEnabled = bp.enabled;
+            this.bpPaused = bp.paused || [];
             this.render(status);
+            this.renderBreakpoints();
         } catch (e) {
             console.error('Poll failed', e);
         }
@@ -306,6 +324,68 @@ class RequestInterceptApp {
             this.btnReplay.disabled = false;
             this.btnReplay.textContent = 'Reenviar';
         }
+    }
+
+    renderBreakpoints() {
+        const count = this.bpPaused.length;
+        this.bpCount.textContent = count;
+        this.breakpointPanel.classList.toggle('hidden', count === 0);
+        this.btnBreakpoints.className = `btn ${this.bpEnabled ? 'btn-primary active' : 'btn-secondary'}`;
+        this.btnBreakpoints.textContent = this.bpEnabled ? 'Breakpoints ON' : 'Breakpoints OFF';
+
+        if (count === 0) return;
+
+        this.bpList.innerHTML = '';
+        for (const p of this.bpPaused) {
+            const div = document.createElement('div');
+            div.className = 'bp-item';
+            const methodClass = `method-tag method-${p.method.toUpperCase()}`;
+            div.innerHTML = `
+                <span class="${methodClass}">${p.method}</span>
+                <span class="bp-host">${this.escapeHtml(p.host)}</span>
+                <span class="bp-url">${this.escapeHtml(p.url)}</span>
+                <span class="bp-time">${new Date(p.timestamp).toLocaleTimeString('pt-BR')}</span>
+                <button class="btn btn-small btn-primary bp-continue" data-id="${p.id}">Continuar</button>
+                <button class="btn btn-small btn-danger bp-drop" data-id="${p.id}">Descartar</button>
+            `;
+            div.querySelector('.bp-continue').addEventListener('click', () => this.bpContinue(p.id));
+            div.querySelector('.bp-drop').addEventListener('click', () => this.bpDrop(p.id));
+            this.bpList.appendChild(div);
+        }
+    }
+
+    async toggleBreakpoints() {
+        const url = this.bpEnabled ? '/api/breakpoints/disable' : '/api/breakpoints/enable';
+        await fetch(url, { method: 'POST' });
+    }
+
+    async bpSetPatterns() {
+        const patterns = this.bpPatternInput.value.split(',').map(s => s.trim()).filter(s => s);
+        await fetch('/api/breakpoints/patterns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patterns)
+        });
+    }
+
+    async bpContinue(id) {
+        await fetch(`/api/breakpoints/${id}/continue`, { method: 'POST' });
+    }
+
+    async bpDrop(id) {
+        await fetch(`/api/breakpoints/${id}/drop`, { method: 'POST' });
+    }
+
+    async bpContinueAll() {
+        await Promise.all(this.bpPaused.map(p =>
+            fetch(`/api/breakpoints/${p.id}/continue`, { method: 'POST' })
+        ));
+    }
+
+    async bpDropAll() {
+        await Promise.all(this.bpPaused.map(p =>
+            fetch(`/api/breakpoints/${p.id}/drop`, { method: 'POST' })
+        ));
     }
 
     async installCert() {

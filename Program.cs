@@ -19,6 +19,7 @@ if (embeddedRes is not null)
         builder.Configuration.AddJsonStream(stream);
 }
 
+builder.Services.AddSingleton<BreakpointService>();
 builder.Services.AddSingleton<CertificateService>(_ =>
 {
     var certService = new CertificateService(AppDomain.CurrentDomain.BaseDirectory);
@@ -222,6 +223,60 @@ app.MapPost("/api/resume", (RequestStore store) =>
 {
     store.IsPaused = false;
     return Results.Ok(new { Paused = false });
+});
+
+// ---- Breakpoint Endpoints ----
+
+app.MapGet("/api/breakpoints", (BreakpointService bp) =>
+    Results.Ok(new
+    {
+        enabled = bp.Enabled,
+        patterns = bp.Patterns,
+        paused = bp.GetAll().Select(p => new
+        {
+            p.Id,
+            p.Method,
+            p.Url,
+            p.Host,
+            p.Timestamp,
+            requestHeaders = p.RequestHeaders,
+            requestBody = p.RequestBody
+        })
+    })
+);
+
+app.MapPost("/api/breakpoints/enable", (BreakpointService bp) =>
+{
+    bp.Enabled = true;
+    return Results.Ok(new { enabled = true });
+});
+
+app.MapPost("/api/breakpoints/disable", (BreakpointService bp) =>
+{
+    bp.Enabled = false;
+    return Results.Ok(new { enabled = false });
+});
+
+app.MapPost("/api/breakpoints/patterns", (BreakpointService bp, List<string> patterns) =>
+{
+    bp.SetPatterns(patterns);
+    return Results.Ok(new { patterns = bp.Patterns });
+});
+
+app.MapPost("/api/breakpoints/{id:guid}/continue", async (Guid id, BreakpointService bp) =>
+{
+    var item = bp.Get(id);
+    if (item is null) return Results.NotFound();
+    bp.Continue(id);
+    return Results.Ok(new { action = "continue" });
+});
+
+app.MapPost("/api/breakpoints/{id:guid}/drop", async (Guid id, BreakpointService bp) =>
+{
+    var item = bp.Get(id);
+    if (item is null) return Results.NotFound();
+    bp.Drop(id);
+    return Results.Ok(new { action = "drop" });
 });
 
 app.MapGet("/api/certificate", (CertificateService certService) =>
