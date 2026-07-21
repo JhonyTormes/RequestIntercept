@@ -16,6 +16,7 @@ public class ProxyService : BackgroundService
     private readonly CertificateService _certService;
     private readonly RequestStore _store;
     private readonly BreakpointService _breakpointService;
+    private readonly BlocklistService _blocklistService;
     private readonly int _proxyPort;
     private TcpListener? _listener;
     private static readonly Encoding HeaderEncoding = Encoding.ASCII;
@@ -25,12 +26,14 @@ public class ProxyService : BackgroundService
     public int ProxyPort { get; }
 
     public ProxyService(ILogger<ProxyService> logger, CertificateService certService,
-        RequestStore store, BreakpointService breakpointService, IConfiguration config)
+        RequestStore store, BreakpointService breakpointService,
+        BlocklistService blocklistService, IConfiguration config)
     {
         _logger = logger;
         _certService = certService;
         _store = store;
         _breakpointService = breakpointService;
+        _blocklistService = blocklistService;
         _proxyPort = config.GetValue<int>("Proxy:Port", 8888);
         ProxyPort = _proxyPort;
     }
@@ -165,6 +168,14 @@ public class ProxyService : BackgroundService
                 RequestBody = decodedBody
             };
 
+            if (_blocklistService.IsBlocked(record.Url))
+            {
+                record.Error = "Bloqueado pelo blocklist";
+                record.DurationMs = sw.ElapsedMilliseconds;
+                _store.Add(record);
+                break;
+            }
+
             if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
             {
                 record.Error = "Interrompido pelo breakpoint";
@@ -230,6 +241,14 @@ public class ProxyService : BackgroundService
             RequestHeaders = headers,
             RequestBody = decodedBody
         };
+
+        if (_blocklistService.IsBlocked(record.Url))
+        {
+            record.Error = "Bloqueado pelo blocklist";
+            record.DurationMs = sw.ElapsedMilliseconds;
+            _store.Add(record);
+            return;
+        }
 
         if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
         {

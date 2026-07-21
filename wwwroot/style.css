@@ -112,6 +112,9 @@ header {
 .btn-small { padding: 4px 10px; font-size: 0.75em; }
 .btn-warning { background: var(--yellow); color: #1a1b26; }
 .btn-danger { background: var(--red); color: #fff; }
+.btn-blocklist { background: var(--orange); color: #1a1b26; }
+.btn-blocklist:hover { background: #ffb454; }
+.btn-blocklist.active { background: var(--red); }
 
 .breakpoint-panel {
     background: var(--surface);

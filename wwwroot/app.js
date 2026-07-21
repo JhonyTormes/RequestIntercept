@@ -28,6 +28,9 @@ class RequestInterceptApp {
         this.btnBreakpoints = document.getElementById('btnBreakpoints');
         this.bpPatternInput = document.getElementById('bpPatternInput');
         this.breakpointPanel = document.getElementById('breakpointPanel');
+        this.btnBlocklist = document.getElementById('btnBlocklist');
+        this.blPatternInput = document.getElementById('blPatternInput');
+        this.blEnabled = false;
         this.bpList = document.getElementById('bpList');
         this.bpCount = document.getElementById('bpCount');
         this.btnBpContinueAll = document.getElementById('btnBpContinueAll');
@@ -55,6 +58,8 @@ class RequestInterceptApp {
         this.btnBpContinueAll.addEventListener('click', () => this.bpContinueAll());
         this.btnBpDropAll.addEventListener('click', () => this.bpDropAll());
         this.bpPatternInput.addEventListener('change', () => this.bpSetPatterns());
+        this.btnBlocklist.addEventListener('click', () => this.toggleBlocklist());
+        this.blPatternInput.addEventListener('change', () => this.blSetPatterns());
 
         this.startPolling();
     }
@@ -66,22 +71,26 @@ class RequestInterceptApp {
 
     async poll() {
         try {
-            const [reqRes, statusRes, proxyRes, bpRes] = await Promise.all([
+            const [reqRes, statusRes, proxyRes, bpRes, blRes] = await Promise.all([
                 fetch('/api/requests'),
                 fetch('/api/status'),
                 fetch('/api/proxy'),
-                fetch('/api/breakpoints')
+                fetch('/api/breakpoints'),
+                fetch('/api/blocklist')
             ]);
             const requests = await reqRes.json();
             const status = await statusRes.json();
             const proxy = await proxyRes.json();
             const bp = await bpRes.json();
+            const bl = await blRes.json();
             this.requests = requests;
             this.proxyEnabled = proxy.enabled;
             this.bpEnabled = bp.enabled;
             this.bpPaused = bp.paused || [];
+            this.blEnabled = bl.enabled;
             this.render(status);
             this.renderBreakpoints();
+            this.renderBlocklist();
         } catch (e) {
             console.error('Poll failed', e);
         }
@@ -386,6 +395,25 @@ class RequestInterceptApp {
         await Promise.all(this.bpPaused.map(p =>
             fetch(`/api/breakpoints/${p.id}/drop`, { method: 'POST' })
         ));
+    }
+
+    renderBlocklist() {
+        this.btnBlocklist.className = `btn ${this.blEnabled ? 'btn-blocklist active' : 'btn-secondary'}`;
+        this.btnBlocklist.textContent = this.blEnabled ? 'Blocklist ON' : 'Blocklist OFF';
+    }
+
+    async toggleBlocklist() {
+        const url = this.blEnabled ? '/api/blocklist/disable' : '/api/blocklist/enable';
+        await fetch(url, { method: 'POST' });
+    }
+
+    async blSetPatterns() {
+        const patterns = this.blPatternInput.value.split(',').map(s => s.trim()).filter(s => s);
+        await fetch('/api/blocklist/patterns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patterns)
+        });
     }
 
     async installCert() {

@@ -19,6 +19,7 @@ if (embeddedRes is not null)
         builder.Configuration.AddJsonStream(stream);
 }
 
+builder.Services.AddSingleton<BlocklistService>();
 builder.Services.AddSingleton<BreakpointService>();
 builder.Services.AddSingleton<CertificateService>(_ =>
 {
@@ -292,6 +293,34 @@ app.MapPost("/api/certificate/install", (CertificateService certService) =>
 {
     var (success, message) = certService.InstallCaCertificate();
     return success ? Results.Ok(new { installed = true, message }) : Results.Ok(new { installed = false, message });
+});
+
+// ---- Blocklist Endpoints ----
+
+app.MapGet("/api/blocklist", (BlocklistService bl) =>
+    Results.Ok(new
+    {
+        enabled = bl.Enabled,
+        patterns = bl.Patterns
+    })
+);
+
+app.MapPost("/api/blocklist/enable", (BlocklistService bl) =>
+{
+    bl.Enabled = true;
+    return Results.Ok(new { enabled = true });
+});
+
+app.MapPost("/api/blocklist/disable", (BlocklistService bl) =>
+{
+    bl.Enabled = false;
+    return Results.Ok(new { enabled = false });
+});
+
+app.MapPost("/api/blocklist/patterns", (BlocklistService bl, List<string> patterns) =>
+{
+    bl.SetPatterns(patterns);
+    return Results.Ok(new { patterns = bl.Patterns });
 });
 
 app.MapFallback(async (HttpContext context) =>
