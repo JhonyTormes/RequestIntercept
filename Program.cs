@@ -53,8 +53,21 @@ else
 
 // ---- API Endpoints ----
 
-app.MapGet("/api/requests", (RequestStore store) =>
-    store.GetAll().Select(r => new
+app.MapGet("/api/requests", (RequestStore store, string? q) =>
+{
+    var all = store.GetAll();
+    if (!string.IsNullOrWhiteSpace(q))
+    {
+        all = all.Where(r =>
+            (r.Url is not null && r.Url.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+            (r.Host is not null && r.Host.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+            (r.RequestBody is not null && r.RequestBody.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+            (r.ResponseBody is not null && r.ResponseBody.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+            r.RequestHeaders?.Any(kv => kv.Value.Any(v => v.Contains(q, StringComparison.OrdinalIgnoreCase))) == true ||
+            r.ResponseHeaders?.Any(kv => kv.Value.Any(v => v.Contains(q, StringComparison.OrdinalIgnoreCase))) == true
+        ).ToList();
+    }
+    return all.Select(r => new
     {
         r.Id,
         r.Timestamp,
@@ -65,8 +78,8 @@ app.MapGet("/api/requests", (RequestStore store) =>
         r.DurationMs,
         r.IsHttps,
         r.Error
-    })
-);
+    });
+});
 
 app.MapGet("/api/requests/{id:guid}", (Guid id, RequestStore store) =>
 {

@@ -71,8 +71,9 @@ class RequestInterceptApp {
 
     async poll() {
         try {
+            const queryParam = this.filterText ? `?q=${encodeURIComponent(this.filterText)}` : '';
             const [reqRes, statusRes, proxyRes, bpRes, blRes] = await Promise.all([
-                fetch('/api/requests'),
+                fetch(`/api/requests${queryParam}`),
                 fetch('/api/status'),
                 fetch('/api/proxy'),
                 fetch('/api/breakpoints'),
@@ -118,14 +119,7 @@ class RequestInterceptApp {
     }
 
     renderRequests() {
-        const filtered = this.filterText
-            ? this.requests.filter(r =>
-                (r.url && r.url.toLowerCase().includes(this.filterText)) ||
-                (r.host && r.host.toLowerCase().includes(this.filterText))
-              )
-            : this.requests;
-
-        const hasRequests = filtered.length > 0;
+        const hasRequests = this.requests.length > 0;
         this.setupBanner.style.display = this.requests.length === 0 && !this.proxyEnabled ? 'flex' : 'none';
         this.requestTable.style.display = hasRequests ? '' : 'none';
         this.emptyState.style.display = hasRequests ? 'none' : 'block';
@@ -138,7 +132,7 @@ class RequestInterceptApp {
         }
 
         const frag = document.createDocumentFragment();
-        for (const r of filtered) {
+        for (const r of this.requests) {
             const tr = document.createElement('tr');
             tr.dataset.id = r.id;
             if (r.error) tr.classList.add('error');
