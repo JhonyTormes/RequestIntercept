@@ -1,4 +1,4 @@
-class RequestInterceptApp {
+    class RequestInterceptApp {
     constructor() {
         this.requests = [];
         this.selectedId = null;
@@ -6,6 +6,7 @@ class RequestInterceptApp {
         this.knownIds = new Set();
         this.pollInterval = null;
         this.proxyEnabled = false;
+        this.editingBpIds = new Set();
 
         this.tableBody = document.getElementById('requestList');
         this.requestTable = document.getElementById('requestTable');
@@ -342,19 +343,92 @@ class RequestInterceptApp {
         for (const p of this.bpPaused) {
             const div = document.createElement('div');
             div.className = 'bp-item';
+            div.dataset.id = p.id;
             const methodClass = `method-tag method-${p.method.toUpperCase()}`;
-            div.innerHTML = `
-                <span class="${methodClass}">${p.method}</span>
-                <span class="bp-host">${this.escapeHtml(p.host)}</span>
-                <span class="bp-url">${this.escapeHtml(p.url)}</span>
-                <span class="bp-time">${new Date(p.timestamp).toLocaleTimeString('pt-BR')}</span>
-                <button class="btn btn-small btn-primary bp-continue" data-id="${p.id}">Continuar</button>
-                <button class="btn btn-small btn-danger bp-drop" data-id="${p.id}">Descartar</button>
-            `;
-            div.querySelector('.bp-continue').addEventListener('click', () => this.bpContinue(p.id));
-            div.querySelector('.bp-drop').addEventListener('click', () => this.bpDrop(p.id));
+
+            if (this.editingBpIds.has(p.id)) {
+                div.innerHTML = this.buildBpEditor(p);
+                div.querySelector('.bp-editor-send').addEventListener('click', () => this.bpEditSend(p.id));
+                div.querySelector('.bp-editor-cancel').addEventListener('click', () => {
+                    this.editingBpIds.delete(p.id);
+                    this.renderBreakpoints();
+                });
+            } else {
+                div.innerHTML = `
+                    <span class="${methodClass}">${p.method}</span>
+                    <span class="bp-host">${this.escapeHtml(p.host)}</span>
+                    <span class="bp-url">${this.escapeHtml(p.url)}</span>
+                    <span class="bp-time">${new Date(p.timestamp).toLocaleTimeString('pt-BR')}</span>
+                    <button class="btn btn-small btn-primary bp-continue" data-id="${p.id}">Continuar</button>
+                    <button class="btn btn-small btn-secondary bp-edit" data-id="${p.id}">Editar</button>
+                    <button class="btn btn-small btn-danger bp-drop" data-id="${p.id}">Descartar</button>
+                `;
+                div.querySelector('.bp-continue').addEventListener('click', () => this.bpContinue(p.id));
+                div.querySelector('.bp-edit').addEventListener('click', () => {
+                    this.editingBpIds.add(p.id);
+                    this.renderBreakpoints();
+                });
+                div.querySelector('.bp-drop').addEventListener('click', () => this.bpDrop(p.id));
+            }
             this.bpList.appendChild(div);
         }
+    }
+
+    buildBpEditor(p) {
+        let headersText = '';
+        if (p.requestHeaders) {
+            const lines = [];
+            for (const [name, values] of Object.entries(p.requestHeaders)) {
+                const val = Array.isArray(values) ? values.join(', ') : values;
+                lines.push(`${name}: ${val}`);
+            }
+            headersText = this.escapeHtml(lines.join('\n'));
+        }
+        const bodyText = this.escapeHtml(p.requestBody || '');
+
+        return `
+            <div class="bp-editor-row">
+                <span class="bp-editor-label">Headers</span>
+                <textarea class="bp-editor-textarea bp-editor-headers" rows="4" placeholder="Header: Value (um por linha)">${headersText}</textarea>
+            </div>
+            <div class="bp-editor-row">
+                <span class="bp-editor-label">Body</span>
+                <textarea class="bp-editor-textarea bp-editor-body" rows="4" placeholder="Corpo da requisicao">${bodyText}</textarea>
+            </div>
+            <div class="bp-editor-actions">
+                <button class="btn btn-small btn-primary bp-editor-send" data-id="${p.id}">Enviar Editado</button>
+                <button class="btn btn-small btn-secondary bp-editor-cancel" data-id="${p.id}">Cancelar</button>
+            </div>
+        `;
+    }
+
+    async bpEditSend(id) {
+        const editorEl = this.bpList.querySelector(`.bp-item[data-id="${id}"]`);
+        if (!editorEl) return;
+
+        const headersTextarea = editorEl.querySelector('.bp-editor-headers');
+        const bodyTextarea = editorEl.querySelector('.bp-editor-body');
+        const headersText = headersTextarea ? headersTextarea.value : '';
+        const bodyText = bodyTextarea ? bodyTextarea.value : '';
+
+        const headers = {};
+        if (headersText.trim()) {
+            for (const line of headersText.split('\n')) {
+                const colonIdx = line.indexOf(':');
+                if (colonIdx > 0) {
+                    const name = line.substring(0, colonIdx).trim();
+                    const value = line.substring(colonIdx + 1).trim();
+                    if (name) headers[name] = [value];
+                }
+            }
+        }
+
+        await fetch(`/api/breakpoints/${id}/continue`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ headers: Object.keys(headers).length > 0 ? headers : null, body: bodyText || null })
+        });
+        this.editingBpIds.delete(id);
     }
 
     async toggleBreakpoints() {

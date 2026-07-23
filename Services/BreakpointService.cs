@@ -44,7 +44,7 @@ public class BreakpointService
 
     public PendingBreakpoint Register(string method, string url, string host,
         Dictionary<string, string[]> requestHeaders, string? requestBody, byte[]? rawBody,
-        TaskCompletionSource<bool> tcs)
+        TaskCompletionSource<BreakpointResult> tcs)
     {
         var item = new PendingBreakpoint
         {
@@ -75,11 +75,16 @@ public class BreakpointService
 
     public int Count => _pending.Count;
 
-    public void Continue(Guid id)
+    public void Continue(Guid id, Dictionary<string, string[]>? modifiedHeaders = null, byte[]? modifiedBody = null)
     {
         if (_pending.TryRemove(id, out var item))
         {
-            item.Tcs.TrySetResult(true);
+            item.Tcs.TrySetResult(new BreakpointResult
+            {
+                Forward = true,
+                ModifiedHeaders = modifiedHeaders,
+                ModifiedBody = modifiedBody
+            });
         }
     }
 
@@ -87,7 +92,7 @@ public class BreakpointService
     {
         if (_pending.TryRemove(id, out var item))
         {
-            item.Tcs.TrySetResult(false);
+            item.Tcs.TrySetResult(new BreakpointResult { Forward = false });
         }
     }
 
@@ -100,7 +105,7 @@ public class BreakpointService
             {
                 if (_pending.TryRemove(id, out _))
                 {
-                    item.Tcs.TrySetResult(false);
+                    item.Tcs.TrySetResult(new BreakpointResult { Forward = false });
                 }
             }
         }
@@ -117,5 +122,5 @@ public class PendingBreakpoint
     public string? RequestBody { get; set; }
     public byte[]? RawBody { get; set; }
     public DateTime Timestamp { get; set; }
-    public required TaskCompletionSource<bool> Tcs { get; set; }
+    public required TaskCompletionSource<BreakpointResult> Tcs { get; set; }
 }

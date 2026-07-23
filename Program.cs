@@ -277,12 +277,32 @@ app.MapPost("/api/breakpoints/patterns", (BreakpointService bp, List<string> pat
     return Results.Ok(new { patterns = bp.Patterns });
 });
 
-app.MapPost("/api/breakpoints/{id:guid}/continue", async (Guid id, BreakpointService bp) =>
+app.MapPost("/api/breakpoints/{id:guid}/continue", async (Guid id, BreakpointService bp, HttpContext ctx) =>
 {
     var item = bp.Get(id);
     if (item is null) return Results.NotFound();
-    bp.Continue(id);
-    return Results.Ok(new { action = "continue" });
+
+    Dictionary<string, string[]>? modifiedHeaders = null;
+    byte[]? modifiedBody = null;
+
+    if (ctx.Request.HasJsonContentType())
+    {
+        try
+        {
+            var edit = await ctx.Request.ReadFromJsonAsync<BreakpointEditRequest>();
+            if (edit is not null)
+            {
+                if (edit.Headers is not null && edit.Headers.Count > 0)
+                    modifiedHeaders = new Dictionary<string, string[]>(edit.Headers, StringComparer.OrdinalIgnoreCase);
+                if (!string.IsNullOrEmpty(edit.Body))
+                    modifiedBody = Encoding.UTF8.GetBytes(edit.Body);
+            }
+        }
+        catch { }
+    }
+
+    bp.Continue(id, modifiedHeaders, modifiedBody);
+    return Results.Ok(new { action = "continue", modified = modifiedHeaders is not null || modifiedBody is not null });
 });
 
 app.MapPost("/api/breakpoints/{id:guid}/drop", async (Guid id, BreakpointService bp) =>

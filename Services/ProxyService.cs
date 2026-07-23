@@ -176,12 +176,25 @@ public class ProxyService : BackgroundService
                 break;
             }
 
-            if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
+            var bpResult = await CheckBreakpointAsync(record, headers, bodyBytes, ct);
+            if (bpResult is not null)
             {
-                record.Error = "Interrompido pelo breakpoint";
-                record.DurationMs = sw.ElapsedMilliseconds;
-                _store.Add(record);
-                break;
+                if (!bpResult.Forward)
+                {
+                    record.Error = "Interrompido pelo breakpoint";
+                    record.DurationMs = sw.ElapsedMilliseconds;
+                    _store.Add(record);
+                    break;
+                }
+                if (bpResult.ModifiedHeaders is not null)
+                    headers = bpResult.ModifiedHeaders;
+                if (bpResult.ModifiedBody is not null)
+                {
+                    bodyBytes = bpResult.ModifiedBody;
+                    headers["content-length"] = [bodyBytes.Length.ToString()];
+                    headers.Remove("transfer-encoding");
+                    record.RequestBody = TryDecodeBody(headers, bodyBytes);
+                }
             }
 
             try
@@ -250,12 +263,25 @@ public class ProxyService : BackgroundService
             return;
         }
 
-        if (!await CheckBreakpointAsync(record, headers, bodyBytes, ct))
+        var bpResult = await CheckBreakpointAsync(record, headers, bodyBytes, ct);
+        if (bpResult is not null)
         {
-            record.Error = "Interrompido pelo breakpoint";
-            record.DurationMs = sw.ElapsedMilliseconds;
-            _store.Add(record);
-            return;
+            if (!bpResult.Forward)
+            {
+                record.Error = "Interrompido pelo breakpoint";
+                record.DurationMs = sw.ElapsedMilliseconds;
+                _store.Add(record);
+                return;
+            }
+            if (bpResult.ModifiedHeaders is not null)
+                headers = bpResult.ModifiedHeaders;
+            if (bpResult.ModifiedBody is not null)
+            {
+                bodyBytes = bpResult.ModifiedBody;
+                headers["content-length"] = [bodyBytes.Length.ToString()];
+                headers.Remove("transfer-encoding");
+                record.RequestBody = TryDecodeBody(headers, bodyBytes);
+            }
         }
 
         try
@@ -287,13 +313,13 @@ public class ProxyService : BackgroundService
         }
     }
 
-    private async Task<bool> CheckBreakpointAsync(InterceptedRequest record,
+    private async Task<BreakpointResult?> CheckBreakpointAsync(InterceptedRequest record,
         Dictionary<string, string[]> headers, byte[]? bodyBytes, CancellationToken ct)
     {
         if (!_breakpointService.ShouldBreak(record.Url))
-            return true;
+            return null;
 
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<BreakpointResult>();
         _breakpointService.Register(record.Method, record.Url, record.Host,
             headers, record.RequestBody, bodyBytes, tcs);
 
@@ -301,14 +327,14 @@ public class ProxyService : BackgroundService
         cts.CancelAfter(TimeSpan.FromSeconds(120));
         try
         {
-            await using (cts.Token.Register(() => tcs.TrySetResult(false)))
+            await using (cts.Token.Register(() => tcs.TrySetResult(new BreakpointResult { Forward = false })))
             {
                 return await tcs.Task;
             }
         }
         catch
         {
-            return false;
+            return new BreakpointResult { Forward = false };
         }
     }
 
