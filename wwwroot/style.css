@@ -513,6 +513,22 @@ main {
 .body-preview .json-bool { color: var(--purple); }
 .body-preview .json-null { color: var(--text); opacity: 0.5; }
 
+.btn-copy-inline {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 400;
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 8px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.btn-copy-inline:hover { background: var(--surface); color: var(--text-bright); }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

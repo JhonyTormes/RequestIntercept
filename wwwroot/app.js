@@ -198,7 +198,7 @@
         let bodyHtml = '';
         if (r.responseBody) {
             bodyHtml = `<div class="detail-section">
-                <h4>Response Body</h4>
+                <h4>Response Body <button class="btn-copy-inline btn-copy-resp">Copiar</button></h4>
                 <div class="body-preview">${this.syntaxHighlight(r.responseBody)}</div>
             </div>`;
         } else if (r.error) {
@@ -211,7 +211,7 @@
         let reqBodyHtml = '';
         if (r.requestBody) {
             reqBodyHtml = `<div class="detail-section">
-                <h4>Request Body</h4>
+                <h4>Request Body <button class="btn-copy-inline btn-copy-req">Copiar</button></h4>
                 <div class="body-preview">${this.syntaxHighlight(r.requestBody)}</div>
             </div>`;
         }
@@ -237,6 +237,22 @@
             </div>
             ${bodyHtml}
         `;
+
+        this.detailBody.querySelector('.btn-copy-resp')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(r.responseBody).then(() => {
+                const btn = this.detailBody.querySelector('.btn-copy-resp');
+                btn.textContent = 'Copiado!';
+                setTimeout(() => btn.textContent = 'Copiar', 2000);
+            });
+        });
+
+        this.detailBody.querySelector('.btn-copy-req')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(r.requestBody).then(() => {
+                const btn = this.detailBody.querySelector('.btn-copy-req');
+                btn.textContent = 'Copiado!';
+                setTimeout(() => btn.textContent = 'Copiar', 2000);
+            });
+        });
     }
 
     renderHeaders(headers) {
