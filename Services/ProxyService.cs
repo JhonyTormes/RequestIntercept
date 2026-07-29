@@ -123,7 +123,7 @@ public class ProxyService : BackgroundService
             (sender, certificate, chain, sslPolicyErrors) => true);
         try
         {
-            await clientSsl.AuthenticateAsServerAsync(cert, false, SslProtocols.Tls12, false);
+            await clientSsl.AuthenticateAsServerAsync(cert, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
         }
         catch (Exception ex)
         {
@@ -203,7 +203,7 @@ public class ProxyService : BackgroundService
                 await server.ConnectAsync(hostname, port, ct);
                 using var serverSsl = new SslStream(server.GetStream(), false,
                     (_, _, _, _) => true);
-                await serverSsl.AuthenticateAsClientAsync(hostname);
+                await serverSsl.AuthenticateAsClientAsync(hostname, null, SslProtocols.Tls12 | SslProtocols.Tls13, true);
 
                 var reqText = BuildHttpRequest(method, path, headers, bodyBytes);
                 await serverSsl.WriteAsync(reqText, ct);
