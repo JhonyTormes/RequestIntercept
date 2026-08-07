@@ -17,6 +17,7 @@ Standalone HTTP/HTTPS MITM (Man-in-the-Middle) intercepting proxy for inspecting
 - ✅ **Replay requests** — one-click resend from the detail panel
 - ✅ **Breakpoints** — pause matched requests, inspect/edit headers and body, then forward or drop
 - ✅ **Blocklist** — automatically drop requests matching URL patterns
+- ✅ **Redirect (URL rewriting)** — rewrite matching URLs to another host/path before forwarding
 - ✅ **Export HAR** — download all captured requests in HTTP Archive format
 - ✅ Zero installation — download and run
 - ✅ Single-file publish — portable `.exe` (~95 MB)
@@ -71,6 +72,8 @@ This produces `publish\RequestIntercept.exe` — copy it anywhere and run.
 | **Breakpoint patterns** | Comma-separated URL patterns for breakpoint matching (e.g. `api.stripe.com, /v2/`) |
 | **Blocklist ON/OFF** | Enables or disables URL blocklist |
 | **Blocklist patterns** | Comma-separated URL patterns to block (e.g. `analytics, tracking`) |
+| **Redirect ON/OFF** | Enables or disables URL rewriting |
+| **Redirect rules** | One rule per line in the format `from => to` (e.g. `api.prod.com => localhost:5000`) |
 
 ### Breakpoints
 
@@ -98,6 +101,20 @@ The blocklist silently drops requests matching one or more URL patterns before t
 1. Enable the blocklist and add patterns in the toolbar
 2. Matching requests are dropped and shown in the log with an error status
 3. Multiple patterns can be separated by commas
+
+### Redirect (URL Rewriting)
+
+Redirect lets you rewrite URLs before they are forwarded, e.g. to point a production API at a local mock server.
+
+**How to use:**
+
+1. Click **"Redirect OFF"** in the toolbar to enable it
+2. Enter rules in the text field, **one per line**, in the format `from => to`
+   - e.g. `https://api.stripe.com => http://localhost:5000` or `api.prod.com => localhost:5000`
+   - The first matching rule wins; the matched substring is replaced and the full request is forwarded to the new target
+3. Matching requests are sent to the rewritten host instead, and the rewritten URL is shown in the **Redirect** row of the detail panel
+
+The rewrite happens **after** blocklist and breakpoint checks, so matching still uses the original URL.
 
 ### Detail Panel
 
@@ -148,6 +165,10 @@ When the `content-type` is not text (`text/*`, `application/json`, `application/
 | `POST` | `/api/blocklist/enable` | Enable blocklist |
 | `POST` | `/api/blocklist/disable` | Disable blocklist |
 | `POST` | `/api/blocklist/patterns` | Set blocklist patterns (JSON body: `["pattern1", "pattern2"]`) |
+| `GET` | `/api/redirect` | Redirect status (enabled, rules) |
+| `POST` | `/api/redirect/enable` | Enable redirect |
+| `POST` | `/api/redirect/disable` | Disable redirect |
+| `POST` | `/api/redirect/rules` | Set redirect rules (JSON body: `[{"from": "x", "to": "y"}]`) |
 
 ## Testing with curl
 
@@ -213,7 +234,8 @@ For **HTTP** requests (no TLS), the proxy receives the absolute URL, extracts ho
 2. **HTTP relay** — direct TCP proxy with absolute URL parsing
 3. **Breakpoints** — matched requests pause via `TaskCompletionSource`; the user can edit and forward or drop
 4. **Blocklist** — matched requests are immediately dropped before reaching the server
-5. **Certificate management** — RSA 4096-bit CA root (10-year validity), RSA 2048-bit per-host certs (365 days), thread-safe caching via `ConcurrentDictionary`
+5. **Redirect** — matched URLs are rewritten to a new host/path before the upstream connection is made
+6. **Certificate management** — RSA 4096-bit CA root (10-year validity), RSA 2048-bit per-host certs (365 days), thread-safe caching via `ConcurrentDictionary`
 
 ## Project Structure
 
@@ -230,7 +252,8 @@ RequestIntercept/
 │   ├── CertificateService.cs           # CA root + per-host TLS cert generation
 │   ├── RequestStore.cs                 # Thread-safe in-memory request storage
 │   ├── BreakpointService.cs            # Breakpoint pattern matching and pause/continue
-│   └── BlocklistService.cs             # URL pattern-based request blocking
+│   ├── BlocklistService.cs           # URL pattern-based request blocking
+│   └── RedirectService.cs            # URL rewriting rules (redirect/remap)
 └── wwwroot/
     ├── index.html                      # Single-page Web UI
     ├── style.css                       # Dark theme styles

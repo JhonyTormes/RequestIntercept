@@ -14,5 +14,6 @@ public class InterceptedRequest
     public string? ResponseBody { get; set; }
     public long DurationMs { get; set; }
     public bool IsHttps { get; set; }
+    public string? RedirectedUrl { get; set; }
     public string? Error { get; set; }
 }

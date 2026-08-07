@@ -17,6 +17,7 @@ public class ProxyService : BackgroundService
     private readonly RequestStore _store;
     private readonly BreakpointService _breakpointService;
     private readonly BlocklistService _blocklistService;
+    private readonly RedirectService _redirectService;
     private readonly int _proxyPort;
     private TcpListener? _listener;
     private static readonly Encoding HeaderEncoding = Encoding.ASCII;
@@ -27,13 +28,14 @@ public class ProxyService : BackgroundService
 
     public ProxyService(ILogger<ProxyService> logger, CertificateService certService,
         RequestStore store, BreakpointService breakpointService,
-        BlocklistService blocklistService, IConfiguration config)
+        BlocklistService blocklistService, RedirectService redirectService, IConfiguration config)
     {
         _logger = logger;
         _certService = certService;
         _store = store;
         _breakpointService = breakpointService;
         _blocklistService = blocklistService;
+        _redirectService = redirectService;
         _proxyPort = config.GetValue<int>("Proxy:Port", 8888);
         ProxyPort = _proxyPort;
     }
@@ -197,15 +199,33 @@ public class ProxyService : BackgroundService
                 }
             }
 
+            var targetHost = hostname;
+            var targetPort = port;
+            var targetPath = path;
+            var redirect = _redirectService.Rewrite(record.Url);
+            if (redirect is not null)
+            {
+                record.RedirectedUrl = redirect;
+                try
+                {
+                    var newUri = new Uri(redirect);
+                    targetHost = newUri.Host;
+                    targetPort = newUri.IsDefaultPort ? 443 : newUri.Port;
+                    targetPath = newUri.PathAndQuery;
+                    headers["host"] = [newUri.IsDefaultPort ? newUri.Host : $"{newUri.Host}:{newUri.Port}"];
+                }
+                catch (UriFormatException) { }
+            }
+
             try
             {
                 using var server = new TcpClient();
-                await server.ConnectAsync(hostname, port, ct);
+                await server.ConnectAsync(targetHost, targetPort, ct);
                 using var serverSsl = new SslStream(server.GetStream(), false,
                     (_, _, _, _) => true);
-                await serverSsl.AuthenticateAsClientAsync(hostname, null, SslProtocols.Tls12 | SslProtocols.Tls13, true);
+                await serverSsl.AuthenticateAsClientAsync(targetHost, null, SslProtocols.Tls12 | SslProtocols.Tls13, true);
 
-                var reqText = BuildHttpRequest(method, path, headers, bodyBytes);
+                var reqText = BuildHttpRequest(method, targetPath, headers, bodyBytes);
                 await serverSsl.WriteAsync(reqText, ct);
 
                 var (statusCode, respHeaders, respBody) = await ReadHttpResponseAsync(serverSsl, ct);
@@ -284,13 +304,31 @@ public class ProxyService : BackgroundService
             }
         }
 
+        var targetHost = hostname;
+        var targetPort = port;
+        var targetPath = path;
+        var redirect = _redirectService.Rewrite(record.Url);
+        if (redirect is not null)
+        {
+            record.RedirectedUrl = redirect;
+            try
+            {
+                var newUri = new Uri(redirect);
+                targetHost = newUri.Host;
+                targetPort = newUri.IsDefaultPort ? 80 : newUri.Port;
+                targetPath = newUri.PathAndQuery;
+                headers["host"] = [newUri.IsDefaultPort ? newUri.Host : $"{newUri.Host}:{newUri.Port}"];
+            }
+            catch (UriFormatException) { }
+        }
+
         try
         {
             using var server = new TcpClient();
-            await server.ConnectAsync(hostname, port, ct);
+            await server.ConnectAsync(targetHost, targetPort, ct);
             var serverStream = server.GetStream();
 
-            var reqText = BuildHttpRequest(method, path, headers, bodyBytes);
+            var reqText = BuildHttpRequest(method, targetPath, headers, bodyBytes);
             await serverStream.WriteAsync(reqText, ct);
 
             var (statusCode, respHeaders, respBody) = await ReadHttpResponseAsync(serverStream, ct);

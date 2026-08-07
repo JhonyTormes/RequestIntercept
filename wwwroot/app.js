@@ -41,10 +41,17 @@
         this.filterInput = document.getElementById('filterInput');
         this.filterText = '';
 
+        this.btnRedirect = document.getElementById('btnRedirect');
+        this.rdPatternInput = document.getElementById('rdPatternInput');
+        this.rdEnabled = false;
+
         this.filterInput.addEventListener('input', (e) => {
             this.filterText = e.target.value.toLowerCase();
             this.renderRequests();
         });
+
+        this.btnRedirect.addEventListener('click', () => this.toggleRedirect());
+        this.rdPatternInput.addEventListener('change', () => this.rdSetRules());
 
         this.btnProxy.addEventListener('click', () => this.toggleProxy());
         this.btnInstallCert.addEventListener('click', () => this.installCert());
@@ -62,6 +69,8 @@
         this.btnBlocklist.addEventListener('click', () => this.toggleBlocklist());
         this.blPatternInput.addEventListener('change', () => this.blSetPatterns());
 
+        this.rdPatternInput.addEventListener('change', () => this.rdSetRules());
+
         this.startPolling();
     }
 
@@ -73,26 +82,30 @@
     async poll() {
         try {
             const queryParam = this.filterText ? `?q=${encodeURIComponent(this.filterText)}` : '';
-            const [reqRes, statusRes, proxyRes, bpRes, blRes] = await Promise.all([
+            const [reqRes, statusRes, proxyRes, bpRes, blRes, rdRes] = await Promise.all([
                 fetch(`/api/requests${queryParam}`),
                 fetch('/api/status'),
                 fetch('/api/proxy'),
                 fetch('/api/breakpoints'),
-                fetch('/api/blocklist')
+                fetch('/api/blocklist'),
+                fetch('/api/redirect')
             ]);
             const requests = await reqRes.json();
             const status = await statusRes.json();
             const proxy = await proxyRes.json();
             const bp = await bpRes.json();
             const bl = await blRes.json();
+            const rd = await rdRes.json();
             this.requests = requests;
             this.proxyEnabled = proxy.enabled;
             this.bpEnabled = bp.enabled;
             this.bpPaused = bp.paused || [];
             this.blEnabled = bl.enabled;
+            this.rdEnabled = rd.enabled;
             this.render(status);
             this.renderBreakpoints();
             this.renderBlocklist();
+            this.renderRedirect();
         } catch (e) {
             console.error('Poll failed', e);
         }
@@ -225,6 +238,7 @@
                 <div class="detail-row"><span class="detail-label">Time:</span><span class="detail-value">${time}</span></div>
                 <div class="detail-row"><span class="detail-label">Duration:</span><span class="detail-value">${r.durationMs}ms</span></div>
                 <div class="detail-row"><span class="detail-label">Protocol:</span><span class="detail-value">${r.isHttps ? 'HTTPS' : 'HTTP'}</span></div>
+                ${r.redirectedUrl ? `<div class="detail-row"><span class="detail-label">Redirect:</span><span class="detail-value" style="color:var(--orange)">${this.escapeHtml(r.redirectedUrl)}</span></div>` : ''}
             </div>
             <div class="detail-section">
                 <h4>Request Headers</h4>
@@ -497,6 +511,30 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patterns)
+        });
+    }
+
+    renderRedirect() {
+        this.btnRedirect.className = `btn ${this.rdEnabled ? 'btn-redirect active' : 'btn-secondary'}`;
+        this.btnRedirect.textContent = this.rdEnabled ? 'Redirect ON' : 'Redirect OFF';
+    }
+
+    async toggleRedirect() {
+        const url = this.rdEnabled ? '/api/redirect/disable' : '/api/redirect/enable';
+        await fetch(url, { method: 'POST' });
+    }
+
+    async rdSetRules() {
+        const rules = this.rdPatternInput.value.split('\n').map(s => s.trim()).filter(s => s).map(line => {
+            const sep = line.indexOf('=>');
+            const name = sep >= 0 ? sep : line.indexOf('=');
+            if (name < 0) return { from: line, to: '' };
+            return { from: line.slice(0, name).trim(), to: line.slice(name + 2).trim() };
+        }).filter(r => r.from);
+        await fetch('/api/redirect/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rules)
         });
     }
 

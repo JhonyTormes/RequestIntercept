@@ -28,6 +28,7 @@ builder.Services.AddSingleton<CertificateService>(_ =>
     return certService;
 });
 builder.Services.AddSingleton<RequestStore>();
+builder.Services.AddSingleton<RedirectService>();
 builder.Services.AddSingleton<ProxyService>();
 builder.Services.AddHostedService<ProxyService>(sp => sp.GetRequiredService<ProxyService>());
 
@@ -354,6 +355,34 @@ app.MapPost("/api/blocklist/patterns", (BlocklistService bl, List<string> patter
 {
     bl.SetPatterns(patterns);
     return Results.Ok(new { patterns = bl.Patterns });
+});
+
+// ---- Redirect Endpoints ----
+
+app.MapGet("/api/redirect", (RedirectService rd) =>
+    Results.Ok(new
+    {
+        enabled = rd.Enabled,
+        rules = rd.Rules
+    })
+);
+
+app.MapPost("/api/redirect/enable", (RedirectService rd) =>
+{
+    rd.Enabled = true;
+    return Results.Ok(new { enabled = true });
+});
+
+app.MapPost("/api/redirect/disable", (RedirectService rd) =>
+{
+    rd.Enabled = false;
+    return Results.Ok(new { enabled = true });
+});
+
+app.MapPost("/api/redirect/rules", (RedirectService rd, List<RedirectRule> rules) =>
+{
+    rd.SetRules(rules);
+    return Results.Ok(new { rules = rd.Rules });
 });
 
 app.MapFallback(async (HttpContext context) =>

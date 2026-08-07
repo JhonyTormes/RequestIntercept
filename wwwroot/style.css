@@ -115,6 +115,9 @@ header {
 .btn-blocklist { background: var(--orange); color: #1a1b26; }
 .btn-blocklist:hover { background: #ffb454; }
 .btn-blocklist.active { background: var(--red); }
+.btn-redirect { background: var(--cyan); color: #1a1b26; }
+.btn-redirect:hover { background: #8fd6ff; }
+.btn-redirect.active { background: var(--red); }
 
 .breakpoint-panel {
     background: var(--surface);
